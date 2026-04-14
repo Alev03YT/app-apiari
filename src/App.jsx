@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 
-const STORAGE_KEY = "app-apiari-completa-v2-mobile";
-
 const floweringOptions = [
   "Non indicata",
   "Acacia",
@@ -27,6 +25,9 @@ const honeyStatusOptions = [
   "Produzione alta",
 ];
 const teamOptions = ["Tutti", "Squadra 1", "Squadra 2", "Squadra 3"];
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 
 function todayLocalDate() {
   const d = new Date();
@@ -136,6 +137,144 @@ function useIsMobile() {
   return isMobile;
 }
 
+function getHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_KEY,
+    Authorization: `Bearer ${SUPABASE_KEY}`,
+    "Content-Type": "application/json",
+    ...extra,
+  };
+}
+
+function fromDb(row) {
+  return {
+    id: row.id,
+    companyName: row.company_name || "",
+    siteName: row.site_name || "",
+    manualAddress: row.manual_address || "",
+    hiveCount: row.hive_count,
+    flowering: row.flowering || "Non indicata",
+    accessType: row.access_type || "",
+    lastVisit: row.last_visit || "",
+    notes: row.notes || "",
+    lat: row.lat,
+    lng: row.lng,
+    assignedTeam: row.assigned_team || "Tutti",
+    apiaryStatus: row.apiary_status || "Non indicato",
+    queenStatus: row.queen_status || "Non indicato",
+    treatmentStatus: row.treatment_status || "Non indicato",
+    lastTreatmentDate: row.last_treatment_date || "",
+    treatmentNotes: row.treatment_notes || "",
+    honeyStatus: row.honey_status || "Non indicato",
+    honeyEstimate: row.honey_estimate || "",
+    photo: row.photo || "",
+    visitHistory: Array.isArray(row.visit_history) ? row.visit_history : [],
+    updatedAt: row.updated_at || "",
+  };
+}
+
+function toDb(item) {
+  return {
+    id: item.id,
+    company_name: item.companyName || null,
+    site_name: item.siteName || null,
+    manual_address: item.manualAddress || null,
+    hive_count: item.hiveCount ?? null,
+    flowering: item.flowering || null,
+    access_type: item.accessType || null,
+    last_visit: item.lastVisit || null,
+    notes: item.notes || null,
+    lat: item.lat ?? null,
+    lng: item.lng ?? null,
+    assigned_team: item.assignedTeam || "Tutti",
+    apiary_status: item.apiaryStatus || null,
+    queen_status: item.queenStatus || null,
+    treatment_status: item.treatmentStatus || null,
+    last_treatment_date: item.lastTreatmentDate || null,
+    treatment_notes: item.treatmentNotes || null,
+    honey_status: item.honeyStatus || null,
+    honey_estimate: item.honeyEstimate || null,
+    photo: item.photo || null,
+    visit_history: Array.isArray(item.visitHistory) ? item.visitHistory : [],
+  };
+}
+
+async function fetchApiari() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/apiari?select=*&order=updated_at.desc`,
+    {
+      headers: getHeaders(),
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Errore caricamento dati");
+  }
+
+  const data = await res.json();
+  return data.map(fromDb);
+}
+
+async function insertApiario(item) {
+  const payload = toDb(item);
+  delete payload.id;
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/apiari`, {
+    method: "POST",
+    headers: getHeaders({
+      Prefer: "return=representation",
+    }),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Errore inserimento");
+  }
+
+  const data = await res.json();
+  return data[0] ? fromDb(data[0]) : null;
+}
+
+async function updateApiario(item) {
+  const payload = toDb(item);
+
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/apiari?id=eq.${encodeURIComponent(item.id)}`,
+    {
+      method: "PATCH",
+      headers: getHeaders({
+        Prefer: "return=representation",
+      }),
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Errore aggiornamento");
+  }
+
+  const data = await res.json();
+  return data[0] ? fromDb(data[0]) : null;
+}
+
+async function deleteApiario(id) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/apiari?id=eq.${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      headers: getHeaders(),
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Errore eliminazione");
+  }
+}
+
 export default function App() {
   const isMobile = useIsMobile();
 
@@ -144,6 +283,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("Pronto");
   const [currentPosition, setCurrentPosition] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const [companyName, setCompanyName] = useState("");
   const [siteName, setSiteName] = useState("");
@@ -166,6 +306,7 @@ export default function App() {
   const [photo, setPhoto] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [sortMode, setSortMode] = useState("distance");
+  const [saving, setSaving] = useState(false);
 
   const [quickVisitDate, setQuickVisitDate] = useState(todayLocalDate());
   const [quickVisitOperator, setQuickVisitOperator] = useState("");
@@ -175,20 +316,27 @@ export default function App() {
   const [quickFeedDone, setQuickFeedDone] = useState(false);
   const [quickVisitNotes, setQuickVisitNotes] = useState("");
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setRecords(JSON.parse(saved));
-      } catch {
-        setRecords([]);
-      }
+  async function loadRecords() {
+    setLoading(true);
+    try {
+      const rows = await fetchApiari();
+      setRecords(rows);
+      setStatus("Dati sincronizzati.");
+    } catch (err) {
+      setStatus(`Errore caricamento: ${String(err.message || err)}`);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  }, [records]);
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      setStatus("Mancano le variabili ambiente di Supabase su Vercel.");
+      setLoading(false);
+      return;
+    }
+    loadRecords();
+  }, []);
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -323,7 +471,7 @@ export default function App() {
     }
   }
 
-  function saveRecord() {
+  async function saveRecord() {
     if (!companyName.trim()) {
       setStatus("Inserisci il nome dell'azienda.");
       return;
@@ -362,16 +510,25 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     };
 
-    if (editingId) {
-      setRecords((prev) => prev.map((rec) => (rec.id === editingId ? item : rec)));
-      setStatus("Scheda aggiornata.");
-    } else {
-      setRecords((prev) => [...prev, item]);
-      setStatus("Azienda salvata.");
-    }
+    setSaving(true);
+    try {
+      let saved;
+      if (editingId) {
+        saved = await updateApiario(item);
+        setStatus("Scheda aggiornata e sincronizzata.");
+      } else {
+        saved = await insertApiario(item);
+        setStatus("Azienda salvata e sincronizzata.");
+      }
 
-    setSelectedId(item.id);
-    resetForm();
+      await loadRecords();
+      if (saved?.id) setSelectedId(saved.id);
+      resetForm();
+    } catch (err) {
+      setStatus(`Errore salvataggio: ${String(err.message || err)}`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function editRecord(item) {
@@ -398,10 +555,15 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function deleteRecord(id) {
-    setRecords((prev) => prev.filter((item) => item.id !== id));
-    if (selectedId === id) setSelectedId("");
-    setStatus("Azienda eliminata.");
+  async function handleDeleteRecord(id) {
+    try {
+      await deleteApiario(id);
+      if (selectedId === id) setSelectedId("");
+      setStatus("Azienda eliminata.");
+      await loadRecords();
+    } catch (err) {
+      setStatus(`Errore eliminazione: ${String(err.message || err)}`);
+    }
   }
 
   function buildQuickVisitRecord() {
@@ -426,7 +588,7 @@ export default function App() {
     };
   }
 
-  function addQuickVisit() {
+  async function addQuickVisit() {
     if (!selectedRecord) {
       setStatus("Seleziona prima un'azienda.");
       return;
@@ -434,37 +596,43 @@ export default function App() {
 
     const newVisit = buildQuickVisitRecord();
 
-    setRecords((prev) =>
-      prev.map((rec) => {
-        if (rec.id !== selectedRecord.id) return rec;
-        return {
-          ...rec,
-          lastVisit: quickVisitDate,
-          queenStatus: quickQueenSeen ? "Presente" : rec.queenStatus,
-          treatmentStatus: quickTreatmentDone ? "Fatto" : rec.treatmentStatus,
-          lastTreatmentDate: quickTreatmentDone ? quickVisitDate : rec.lastTreatmentDate,
-          honeyStatus: quickMelarioPresent ? "Melario presente" : rec.honeyStatus,
-          visitHistory: [newVisit, ...(rec.visitHistory || [])],
-        };
-      })
-    );
+    const updated = {
+      ...selectedRecord,
+      lastVisit: quickVisitDate,
+      queenStatus: quickQueenSeen ? "Presente" : selectedRecord.queenStatus,
+      treatmentStatus: quickTreatmentDone ? "Fatto" : selectedRecord.treatmentStatus,
+      lastTreatmentDate: quickTreatmentDone ? quickVisitDate : selectedRecord.lastTreatmentDate,
+      honeyStatus: quickMelarioPresent ? "Melario presente" : selectedRecord.honeyStatus,
+      visitHistory: [newVisit, ...(selectedRecord.visitHistory || [])],
+    };
 
-    resetQuickVisit();
-    setStatus("Visita rapida registrata.");
+    try {
+      await updateApiario(updated);
+      resetQuickVisit();
+      setStatus("Visita rapida registrata.");
+      await loadRecords();
+      setSelectedId(updated.id);
+    } catch (err) {
+      setStatus(`Errore visita rapida: ${String(err.message || err)}`);
+    }
   }
 
-  function removeVisit(visitId) {
+  async function removeVisit(visitId) {
     if (!selectedRecord) return;
-    setRecords((prev) =>
-      prev.map((rec) => {
-        if (rec.id !== selectedRecord.id) return rec;
-        return {
-          ...rec,
-          visitHistory: (rec.visitHistory || []).filter((visit) => visit.id !== visitId),
-        };
-      })
-    );
-    setStatus("Voce storico eliminata.");
+
+    const updated = {
+      ...selectedRecord,
+      visitHistory: (selectedRecord.visitHistory || []).filter((visit) => visit.id !== visitId),
+    };
+
+    try {
+      await updateApiario(updated);
+      setStatus("Voce storico eliminata.");
+      await loadRecords();
+      setSelectedId(updated.id);
+    } catch (err) {
+      setStatus(`Errore storico: ${String(err.message || err)}`);
+    }
   }
 
   function openRoute(provider) {
@@ -506,15 +674,26 @@ export default function App() {
     setStatus("Backup esportato.");
   }
 
-  function importBackup(event) {
+  async function importBackup(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const parsed = JSON.parse(String(reader.result));
         if (!Array.isArray(parsed)) throw new Error("Formato non valido");
-        setRecords(parsed);
+
+        for (const item of parsed) {
+          const normalized = {
+            ...item,
+            id: item.id || crypto.randomUUID(),
+          };
+          await updateApiario(normalized).catch(async () => {
+            await insertApiario(normalized);
+          });
+        }
+
+        await loadRecords();
         setStatus("Backup importato correttamente.");
       } catch {
         setStatus("Il file selezionato non è valido.");
@@ -684,8 +863,8 @@ export default function App() {
                 Carica foto
                 <input type="file" accept="image/*" hidden onChange={onPhotoSelected} />
               </label>
-              <button style={buttonStyle(true)} onClick={saveRecord}>
-                {editingId ? "Aggiorna" : "Salva"}
+              <button style={buttonStyle(true)} onClick={saveRecord} disabled={saving}>
+                {saving ? "Salvataggio..." : editingId ? "Aggiorna" : "Salva"}
               </button>
               <button style={buttonStyle(false)} onClick={resetForm}>Pulisci</button>
               <button style={buttonStyle(false)} onClick={exportBackup}>Backup</button>
@@ -735,10 +914,17 @@ export default function App() {
                 <option value="name">Ordina per nome</option>
                 <option value="visit">Ordina per ultima visita</option>
               </select>
+              <button style={buttonStyle(false)} onClick={loadRecords}>
+                {loading ? "Caricamento..." : "Aggiorna dati"}
+              </button>
             </div>
 
             <div style={{ display: "grid", gap: 10, maxHeight: isMobile ? "none" : 700, overflow: "auto" }}>
-              {filteredRecords.length === 0 ? (
+              {loading ? (
+                <div style={{ ...cardStyle(false), textAlign: "center", color: "#6b7280" }}>
+                  Caricamento dati...
+                </div>
+              ) : filteredRecords.length === 0 ? (
                 <div style={{ ...cardStyle(false), textAlign: "center", color: "#6b7280" }}>
                   Nessuna azienda salvata.
                 </div>
@@ -894,7 +1080,7 @@ export default function App() {
                     <button style={buttonStyle(true)} onClick={() => openRoute("google")}>Maps</button>
                     <button style={buttonStyle(false)} onClick={() => openRoute("waze")}>Waze</button>
                     <button style={buttonStyle(false)} onClick={() => editRecord(selectedRecord)}>Modifica</button>
-                    <button style={buttonStyle(false)} onClick={() => deleteRecord(selectedRecord.id)}>Elimina</button>
+                    <button style={buttonStyle(false)} onClick={() => handleDeleteRecord(selectedRecord.id)}>Elimina</button>
                   </div>
                 </>
               )}
