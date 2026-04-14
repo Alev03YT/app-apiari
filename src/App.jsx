@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const STORAGE_KEY = "app-apiari-completa-v1";
+const STORAGE_KEY = "app-apiari-completa-v2-mobile";
 
 const floweringOptions = [
   "Non indicata",
@@ -66,7 +66,7 @@ function readFileAsDataUrl(file) {
 function badgeStyle(bg, color) {
   return {
     display: "inline-block",
-    padding: "4px 10px",
+    padding: "5px 10px",
     borderRadius: 999,
     fontSize: 12,
     fontWeight: 600,
@@ -89,11 +89,12 @@ function cardStyle(selected = false) {
 function inputStyle() {
   return {
     width: "100%",
-    padding: "10px 12px",
+    padding: "12px 14px",
     borderRadius: 12,
     border: "1px solid #d1d5db",
-    fontSize: 14,
+    fontSize: 16,
     boxSizing: "border-box",
+    background: "#fff",
   };
 }
 
@@ -109,17 +110,35 @@ function sectionCard() {
 
 function buttonStyle(primary = true) {
   return {
-    padding: "11px 14px",
+    padding: "12px 14px",
     borderRadius: 12,
     border: primary ? "none" : "1px solid #d1d5db",
     background: primary ? "#111827" : "#fff",
     color: primary ? "#fff" : "#111827",
     fontWeight: 600,
+    fontSize: 15,
     cursor: "pointer",
+    minHeight: 46,
   };
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+
+  useEffect(() => {
+    function onResize() {
+      setIsMobile(window.innerWidth < 900);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  return isMobile;
+}
+
 export default function App() {
+  const isMobile = useIsMobile();
+
   const [records, setRecords] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
@@ -376,6 +395,7 @@ export default function App() {
     setHoneyEstimate(item.honeyEstimate || "");
     setPhoto(item.photo || "");
     setStatus("Stai modificando la scheda selezionata.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function deleteRecord(id) {
@@ -509,15 +529,15 @@ export default function App() {
       style={{
         minHeight: "100vh",
         background: "#f8fafc",
-        padding: 16,
+        padding: isMobile ? 10 : 16,
         fontFamily: "Arial, sans-serif",
         color: "#111827",
       }}
     >
       <div style={{ maxWidth: 1300, margin: "0 auto", display: "grid", gap: 16 }}>
         <div style={sectionCard()}>
-          <h1 style={{ margin: 0, fontSize: 30 }}>Gestione aziende e apiari</h1>
-          <p style={{ color: "#6b7280", marginTop: 8 }}>
+          <h1 style={{ margin: 0, fontSize: isMobile ? 24 : 30 }}>Gestione aziende e apiari</h1>
+          <p style={{ color: "#6b7280", marginTop: 8, fontSize: isMobile ? 14 : 16 }}>
             Scheda azienda completa, check rapido visita, storico e navigazione diretta.
           </p>
 
@@ -525,7 +545,7 @@ export default function App() {
             style={{
               display: "grid",
               gap: 12,
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))",
               marginTop: 16,
             }}
           >
@@ -651,18 +671,25 @@ export default function App() {
               />
             </div>
 
-            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button style={buttonStyle(false)} onClick={detectPosition}>Usa posizione attuale</button>
-              <label style={{ ...buttonStyle(false), display: "inline-flex", alignItems: "center" }}>
+            <div
+              style={{
+                gridColumn: "1 / -1",
+                display: "grid",
+                gap: 10,
+                gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(160px, 1fr))",
+              }}
+            >
+              <button style={buttonStyle(false)} onClick={detectPosition}>Usa posizione</button>
+              <label style={{ ...buttonStyle(false), display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                 Carica foto
                 <input type="file" accept="image/*" hidden onChange={onPhotoSelected} />
               </label>
               <button style={buttonStyle(true)} onClick={saveRecord}>
-                {editingId ? "Aggiorna azienda" : "Salva azienda"}
+                {editingId ? "Aggiorna" : "Salva"}
               </button>
-              <button style={buttonStyle(false)} onClick={resetForm}>Pulisci campi</button>
+              <button style={buttonStyle(false)} onClick={resetForm}>Pulisci</button>
               <button style={buttonStyle(false)} onClick={exportBackup}>Backup</button>
-              <label style={{ ...buttonStyle(false), display: "inline-flex", alignItems: "center" }}>
+              <label style={{ ...buttonStyle(false), display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                 Importa
                 <input type="file" accept="application/json" hidden onChange={importBackup} />
               </label>
@@ -690,11 +717,11 @@ export default function App() {
           style={{
             display: "grid",
             gap: 16,
-            gridTemplateColumns: "minmax(320px, 0.95fr) minmax(320px, 1.05fr)",
+            gridTemplateColumns: isMobile ? "1fr" : "minmax(320px, 0.95fr) minmax(320px, 1.05fr)",
           }}
         >
           <div style={sectionCard()}>
-            <h2 style={{ marginTop: 0 }}>Elenco aziende</h2>
+            <h2 style={{ marginTop: 0, fontSize: isMobile ? 22 : 24 }}>Elenco aziende</h2>
 
             <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
               <input
@@ -710,7 +737,7 @@ export default function App() {
               </select>
             </div>
 
-            <div style={{ display: "grid", gap: 10, maxHeight: 700, overflow: "auto" }}>
+            <div style={{ display: "grid", gap: 10, maxHeight: isMobile ? "none" : 700, overflow: "auto" }}>
               {filteredRecords.length === 0 ? (
                 <div style={{ ...cardStyle(false), textAlign: "center", color: "#6b7280" }}>
                   Nessuna azienda salvata.
@@ -751,7 +778,9 @@ export default function App() {
                     </div>
 
                     {item.manualAddress ? (
-                      <div style={{ marginTop: 8, fontSize: 13, color: "#6b7280" }}>{item.manualAddress}</div>
+                      <div style={{ marginTop: 8, fontSize: 13, color: "#6b7280", wordBreak: "break-word" }}>
+                        {item.manualAddress}
+                      </div>
                     ) : null}
                   </div>
                 ))
@@ -761,7 +790,7 @@ export default function App() {
 
           <div style={{ display: "grid", gap: 16 }}>
             <div style={sectionCard()}>
-              <h2 style={{ marginTop: 0 }}>Scheda azienda</h2>
+              <h2 style={{ marginTop: 0, fontSize: isMobile ? 22 : 24 }}>Scheda azienda</h2>
 
               {!selectedRecord ? (
                 <div style={{ color: "#6b7280" }}>Seleziona un’azienda dall’elenco.</div>
@@ -769,7 +798,7 @@ export default function App() {
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                     <div>
-                      <div style={{ fontSize: 24, fontWeight: 700 }}>{selectedRecord.companyName}</div>
+                      <div style={{ fontSize: isMobile ? 22 : 24, fontWeight: 700 }}>{selectedRecord.companyName}</div>
                       {selectedRecord.siteName ? (
                         <div style={{ color: "#4b5563", marginTop: 4 }}>{selectedRecord.siteName}</div>
                       ) : null}
@@ -794,7 +823,7 @@ export default function App() {
                     style={{
                       display: "grid",
                       gap: 10,
-                      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                      gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(180px, 1fr))",
                       marginTop: 14,
                     }}
                   >
@@ -825,7 +854,7 @@ export default function App() {
                   </div>
 
                   {selectedRecord.manualAddress ? (
-                    <div style={{ ...cardStyle(false), marginTop: 12 }}>
+                    <div style={{ ...cardStyle(false), marginTop: 12, wordBreak: "break-word" }}>
                       <b>Indirizzo</b>
                       <div style={{ marginTop: 6 }}>{selectedRecord.manualAddress}</div>
                     </div>
@@ -854,9 +883,16 @@ export default function App() {
                     </div>
                   ) : null}
 
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                    <button style={buttonStyle(true)} onClick={() => openRoute("google")}>Apri in Google Maps</button>
-                    <button style={buttonStyle(false)} onClick={() => openRoute("waze")}>Apri in Waze</button>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: 10,
+                      gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, minmax(0, 1fr))",
+                      marginTop: 14,
+                    }}
+                  >
+                    <button style={buttonStyle(true)} onClick={() => openRoute("google")}>Maps</button>
+                    <button style={buttonStyle(false)} onClick={() => openRoute("waze")}>Waze</button>
                     <button style={buttonStyle(false)} onClick={() => editRecord(selectedRecord)}>Modifica</button>
                     <button style={buttonStyle(false)} onClick={() => deleteRecord(selectedRecord.id)}>Elimina</button>
                   </div>
@@ -865,7 +901,7 @@ export default function App() {
             </div>
 
             <div style={sectionCard()}>
-              <h2 style={{ marginTop: 0 }}>Check rapido visita</h2>
+              <h2 style={{ marginTop: 0, fontSize: isMobile ? 22 : 24 }}>Check rapido visita</h2>
 
               {!selectedRecord ? (
                 <div style={{ color: "#6b7280" }}>Seleziona un’azienda per registrare una visita rapida.</div>
@@ -875,7 +911,7 @@ export default function App() {
                     style={{
                       display: "grid",
                       gap: 10,
-                      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                      gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(180px, 1fr))",
                     }}
                   >
                     <div>
@@ -901,7 +937,7 @@ export default function App() {
                     style={{
                       display: "grid",
                       gap: 10,
-                      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                      gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(180px, 1fr))",
                       marginTop: 12,
                     }}
                   >
@@ -952,24 +988,26 @@ export default function App() {
                   </div>
 
                   <div style={{ marginTop: 12 }}>
-                    <button style={buttonStyle(true)} onClick={addQuickVisit}>Registra visita rapida</button>
+                    <button style={{ ...buttonStyle(true), width: "100%" }} onClick={addQuickVisit}>
+                      Registra visita rapida
+                    </button>
                   </div>
                 </>
               )}
             </div>
 
             <div style={sectionCard()}>
-              <h2 style={{ marginTop: 0 }}>Storico visite</h2>
+              <h2 style={{ marginTop: 0, fontSize: isMobile ? 22 : 24 }}>Storico visite</h2>
 
               {!selectedRecord ? (
                 <div style={{ color: "#6b7280" }}>Seleziona un’azienda per vedere lo storico.</div>
               ) : (selectedRecord.visitHistory || []).length === 0 ? (
                 <div style={{ color: "#6b7280" }}>Nessuna visita registrata.</div>
               ) : (
-                <div style={{ display: "grid", gap: 10, maxHeight: 350, overflow: "auto" }}>
+                <div style={{ display: "grid", gap: 10, maxHeight: isMobile ? "none" : 350, overflow: "auto" }}>
                   {(selectedRecord.visitHistory || []).map((visit) => (
                     <div key={visit.id} style={cardStyle(false)}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                         <div>
                           <div style={{ fontWeight: 700 }}>{visit.date || "Data non indicata"}</div>
                           {visit.operator ? (
